@@ -12,12 +12,13 @@ import {
   Grid,
 } from "@mui/material";
 import WavesIcon from '@mui/icons-material/Waves';
+import io from "socket.io-client";
 
 // --- Helper Components & Functions ---
 
 const HistoryChart = ({ data }) => {
   if (data.length < 2) return null;
-  const maxVal = Math.max(22, ...data); // Ensure a consistent scale
+  const maxVal = Math.max(22, ...data);
   const points = data.map((d, i) => `${(i / (data.length - 1)) * 100},${100 - (d / maxVal) * 90}`).join(' ');
 
   return (
@@ -55,11 +56,20 @@ const labelToApiKeyMap = {
   "Sea Temp (°C)": "SST",
 };
 
+const socket = io("http://localhost:5000");
+
 export default function AuthoritiesPage() {
   const [formData, setFormData] = useState(initialFormState);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
+  
+  // Removed: messageToSend state
+
+  // NEW: Function to send the message automatically
+  const sendAlert = (message) => {
+    socket.emit("authorities_message", { message });
+  };
 
   useEffect(() => {
     const timerId = setTimeout(() => {
@@ -114,6 +124,13 @@ export default function AuthoritiesPage() {
 
       const data = await response.json();
       setResult(data);
+      
+      // NEW: Check for Kallakkadal and send the message automatically
+      if (data.prediction === 'Kallakkadal') {
+        const alertMessage = "🚨 DANGER: Kallakkadal conditions detected. Please take caution.";
+        sendAlert(alertMessage);
+      }
+      
     } catch (err) {
       console.error("Error:", err);
       setResult({ error: "Failed to connect to the server." });
@@ -170,6 +187,8 @@ export default function AuthoritiesPage() {
               </Box>
             </Paper>
           </Grid>
+
+          {/* Removed: The separate Grid item for sending a message */}
         </Grid>
       </Container>
     </Box>

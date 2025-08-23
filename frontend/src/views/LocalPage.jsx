@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Paper, Grid, Divider } from '@mui/material';
 import { keyframes } from '@mui/system';
+import io from "socket.io-client";
 
 // Import MUI Icons
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
@@ -28,7 +29,7 @@ const StatusIcon = ({ status }) => {
 
 const HistoryChart = ({ data }) => {
   if (data.length < 2) return null;
-  const maxVal = Math.max(22, ...data); // Ensure a consistent scale
+  const maxVal = Math.max(22, ...data);
   const points = data.map((d, i) => `${(i / (data.length - 1)) * 100},${100 - (d / maxVal) * 90}`).join(' ');
 
   return (
@@ -53,6 +54,7 @@ const emergencyContacts = [
   { name: 'Taluk Hospital', number: '0485 2842 226', icon: <LocalHospitalIcon /> },
 ];
 
+const socket = io("http://localhost:5000");
 
 // --- Main Page Component ---
 
@@ -60,22 +62,49 @@ export default function LocalPage() {
   const [status, setStatus] = useState('Safe');
   const [wavePeriod, setWavePeriod] = useState(0);
   const [history, setHistory] = useState([]);
+  const [receivedMessage, setReceivedMessage] = useState("");
+  // NEW: State to control whether the simulation is running
+  const [isSimulating, setIsSimulating] = useState(true); 
 
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      const newWavePeriod = parseFloat(getRandomNumber(5, 22).toFixed(2));
-      let newStatus = 'Safe';
+    let intervalId;
 
-      if (newWavePeriod > 17) newStatus = 'Danger';
-      else if (newWavePeriod > 14) newStatus = 'Caution';
+    if (isSimulating) {
+      intervalId = setInterval(() => {
+        const newWavePeriod = parseFloat(getRandomNumber(5, 22).toFixed(2));
+        let newStatus = 'Safe';
+
+        if (newWavePeriod > 17) newStatus = 'Danger';
+        else if (newWavePeriod > 14) newStatus = 'Caution';
+        
+        setStatus(newStatus);
+        setWavePeriod(newWavePeriod);
+        setHistory(prev => [...prev.slice(-14), newWavePeriod]);
+      }, 4000);
+    }
+
+    // NEW: Listen for the 'locals_message' event
+    socket.on("locals_message", (data) => {
+      setReceivedMessage(data.message);
       
-      setStatus(newStatus);
-      setWavePeriod(newWavePeriod);
-      setHistory(prev => [...prev.slice(-14), newWavePeriod]); // Keep last 15 data points
-    }, 4000);
+      // Stop the simulation and set to danger when a message is received
+      setIsSimulating(false);
+      setStatus('Danger');
+      setWavePeriod(18.5); // Set to a value above 18
+      setHistory(prev => [...prev.slice(-14), 18.5]);
+      
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    });
 
-    return () => clearInterval(intervalId);
-  }, []);
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+      socket.off("locals_message");
+    };
+  }, [isSimulating]); // Dependency array to re-run effect when isSimulating changes
 
   const getStatusInfo = (currentStatus) => {
     switch (currentStatus) {
@@ -118,6 +147,13 @@ export default function LocalPage() {
         <Typography variant="h6">
           Current Period: <Typography component="span" sx={{ fontWeight: 'bold' }}>{wavePeriod} </Typography>
         </Typography>
+        <Divider sx={{ my: 3, width: '50%', bgcolor: 'rgba(255, 255, 255, 0.3)' }} />
+        <Typography variant="body1" sx={{ mt: 1, color: 'rgba(255, 255, 255, 0.9)' }}>
+          Message from Authorities: 
+          <Typography component="span" sx={{ fontWeight: 'bold' }}>
+            {receivedMessage || "Waiting..."}
+          </Typography>
+        </Typography>
       </Paper>
 
       {/* Main Content Area */}
@@ -126,33 +162,31 @@ export default function LocalPage() {
           Calicut Coastal Information
         </Typography>
         
-        {/* Centered Graph */}
         <Box sx={{ maxWidth: '800px', mx: 'auto', mb: 5 }}>
-            <HistoryChart data={history} />
+          <HistoryChart data={history} />
         </Box>
         
         <Divider sx={{ my: 4, bgcolor: 'grey.700' }} />
 
-        {/* Emergency Contacts Section */}
         <Box>
-            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
-                Emergency Contacts
-            </Typography>
-            <Grid container spacing={3}>
-                {emergencyContacts.map((contact) => (
-                    <Grid item xs={12} md={6} lg={4} key={contact.name}>
-                        <Paper sx={{ p: 2, bgcolor: 'grey.800', display: 'flex', alignItems: 'center' }}>
-                            <Box sx={{ mr: 2, color: 'primary.main' }}>{contact.icon}</Box>
-                            <Box>
-                                <Typography sx={{ fontWeight: 'bold' }}>{contact.name}</Typography>
-                                <Typography variant="body2" sx={{ color: 'grey.400', display: 'flex', alignItems: 'center' }}>
-                                    <CallIcon sx={{ fontSize: '1rem', mr: 0.5 }}/> {contact.number}
-                                </Typography>
-                            </Box>
-                        </Paper>
-                    </Grid>
-                ))}
-            </Grid>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
+            Emergency Contacts
+          </Typography>
+          <Grid container spacing={3}>
+            {emergencyContacts.map((contact) => (
+              <Grid item xs={12} md={6} lg={4} key={contact.name}>
+                <Paper sx={{ p: 2, bgcolor: 'grey.800', display: 'flex', alignItems: 'center' }}>
+                  <Box sx={{ mr: 2, color: 'primary.main' }}>{contact.icon}</Box>
+                  <Box>
+                    <Typography sx={{ fontWeight: 'bold' }}>{contact.name}</Typography>
+                    <Typography variant="body2" sx={{ color: 'grey.400', display: 'flex', alignItems: 'center' }}>
+                      <CallIcon sx={{ fontSize: '1rem', mr: 0.5 }}/> {contact.number}
+                    </Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
         </Box>
       </Box>
     </Box>
