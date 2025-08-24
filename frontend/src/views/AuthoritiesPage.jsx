@@ -14,24 +14,17 @@ import {
 import WavesIcon from '@mui/icons-material/Waves';
 import io from "socket.io-client";
 
-/* // NOTE: Firebase imports are commented out as we are now simulating data locally.
-// You can uncomment them if you want to switch back to real data.
-
+// NOTE: Using simulated data as in the last version.
+/*
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue } from 'firebase/database';
-
-const firebaseConfig = {
-  // ... your config details
-};
-
+const firebaseConfig = { ... };
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 */
 
 
 // --- Helper Components & Functions ---
-
-// ADDED: Helper function to generate a random number within a range
 const getRandomNumber = (min, max) => {
     return (Math.random() * (max - min) + min).toFixed(2);
 };
@@ -43,7 +36,7 @@ const HistoryChart = ({ data }) => {
 
   return (
     <Box>
-      <Typography variant="h6" gutterBottom>Wave Period Trend (Last Minute)</Typography>
+      <Typography variant="h6" gutterBottom>Wave Period Trend</Typography>
       <Paper elevation={3} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.2)' }}>
         <svg viewBox="0 0 100 100" width="100%" height="150">
           <polyline fill="none" stroke="#63b3ed" strokeWidth="1" points={points} />
@@ -86,7 +79,6 @@ export default function AuthoritiesPage() {
     socket.emit("authorities_message", { message });
   };
 
-  // This useEffect for the prediction form is UNCHANGED
   useEffect(() => {
     const timerId = setTimeout(() => {
       if (formData["Wave Height (m)"]) handleCheck();
@@ -94,18 +86,6 @@ export default function AuthoritiesPage() {
     return () => clearTimeout(timerId);
   }, [formData]);
 
-  /*
-  // REMOVED: The original useEffect that listened for real Firebase data.
-  useEffect(() => {
-    const sensorDataRef = ref(database, 'sensor/data');
-    const unsubscribe = onValue(sensorDataRef, (snapshot) => {
-      // ... logic to set real data
-    });
-    return () => unsubscribe();
-  }, []);
-  */
-
-  // --- ADDED: useEffect to SIMULATE live sensor data ---
   useEffect(() => {
     const simulationInterval = setInterval(() => {
         const newSensorData = {
@@ -114,19 +94,15 @@ export default function AuthoritiesPage() {
             intensity: getRandomNumber(1, 10),
         };
         setSensorData(newSensorData);
-    }, 1500); // Update every 1.5 seconds
-
-    // Cleanup function to stop the interval when the component unmounts
+    }, 1500);
     return () => clearInterval(simulationInterval);
-  }, []); // Empty array ensures this runs only once on mount
+  }, []);
 
-  // This function for the prediction form is UNCHANGED
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prevState) => ({ ...prevState, [name]: value }));
   };
   
-  // This function for the prediction form is UNCHANGED
   const handleCheck = async () => {
     try {
       setLoading(true);
@@ -214,14 +190,21 @@ export default function AuthoritiesPage() {
             </Paper>
           </Grid>
 
-          <Grid item xs={12} md={6}>
-            <Paper elevation={3} sx={{ p: 3, backgroundColor: 'rgba(0, 0, 0, 0.2)', color: 'white', mb: 4 }}>
-              <Typography variant="h6" gutterBottom>Live Sensor Readings</Typography>
-              <Typography><strong>Live Roll:</strong> {sensorData.roll} degrees</Typography>
-              <Typography><strong>Calculated Wave Period:</strong> {sensorData.period} s</Typography>
-              <Typography><strong>Calculated Wave Intensity:</strong> {sensorData.intensity} degrees</Typography>
-            </Paper>
-            <HistoryChart data={history} />
+          {/* EDITED: Added top margin (mt: 2) to this Grid item to move it down */}
+          <Grid item xs={12} md={6} sx={{ mt: 20}}>
+            <Grid container spacing={4}>
+              <Grid item xs={12} md={6}>
+                <Paper elevation={3} sx={{ p: 3, backgroundColor: 'rgba(0, 0, 0, 0.2)', color: 'white', height: '100%' }}>
+                  <Typography variant="h6" gutterBottom>Live Sensor Readings</Typography>
+                  <Typography><strong>Live Roll:</strong> {sensorData.roll} degrees</Typography>
+                  <Typography><strong>Calculated Wave Period:</strong> {sensorData.period} s</Typography>
+                  <Typography><strong>Calculated Wave Intensity:</strong> {sensorData.intensity} degrees</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <HistoryChart data={history} />
+              </Grid>
+            </Grid>
           </Grid>
         </Grid>
       </Container>
