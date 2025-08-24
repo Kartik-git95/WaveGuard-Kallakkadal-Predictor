@@ -1,7 +1,8 @@
 import { useState } from "react";
-import LoginPage from "./views/LoginPage"; // import your login component
-import AuthoritiesPage from "./views/AuthoritiesPage"; // example authorities dashboard
-import LocalsPage from "./views/LocalPage"; // example locals dashboard
+import LoginPage from "./views/LoginPage";
+import AuthoritiesPage from "./views/AuthoritiesPage";
+// FIX: Corrected the component import name to match the file.
+import LocalPage from "./views/LocalPage";
 
 export default function App() {
   const [role, setRole] = useState(null);
@@ -23,7 +24,7 @@ export default function App() {
       {role === "authorities" ? (
         <AuthoritiesPage />
       ) : (
-        <LocalsPage />
+        <LocalPage />
       )}
     </>
   );

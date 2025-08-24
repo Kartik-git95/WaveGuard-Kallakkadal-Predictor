@@ -14,10 +14,30 @@ import {
 import WavesIcon from '@mui/icons-material/Waves';
 import io from "socket.io-client";
 
+/* // NOTE: Firebase imports are commented out as we are now simulating data locally.
+// You can uncomment them if you want to switch back to real data.
+
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, onValue } from 'firebase/database';
+
+const firebaseConfig = {
+  // ... your config details
+};
+
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
+*/
+
+
 // --- Helper Components & Functions ---
 
+// ADDED: Helper function to generate a random number within a range
+const getRandomNumber = (min, max) => {
+    return (Math.random() * (max - min) + min).toFixed(2);
+};
+
 const HistoryChart = ({ data }) => {
-  if (data.length < 2) return null;
+  if (!data || data.length < 2) return null;
   const maxVal = Math.max(22, ...data);
   const points = data.map((d, i) => `${(i / (data.length - 1)) * 100},${100 - (d / maxVal) * 90}`).join(' ');
 
@@ -37,7 +57,6 @@ const HistoryChart = ({ data }) => {
 };
 
 // --- Main Page Component ---
-
 const initialFormState = {
   "Wave Height (m)": "1.5",
   "Max Wave (m)": "2.5",
@@ -46,7 +65,6 @@ const initialFormState = {
   "Swell Direction (°)": "190",
   "Sea Temp (°C)": "28.5",
 };
-
 const labelToApiKeyMap = {
   "Wave Height (m)": "Hs",
   "Max Wave (m)": "Hmax",
@@ -55,7 +73,6 @@ const labelToApiKeyMap = {
   "Swell Direction (°)": "Peak Direction",
   "Sea Temp (°C)": "SST",
 };
-
 const socket = io("http://localhost:5000");
 
 export default function AuthoritiesPage() {
@@ -63,14 +80,13 @@ export default function AuthoritiesPage() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
-  
-  // Removed: messageToSend state
+  const [sensorData, setSensorData] = useState({ roll: '--', period: '--', intensity: '--' });
 
-  // NEW: Function to send the message automatically
   const sendAlert = (message) => {
     socket.emit("authorities_message", { message });
   };
 
+  // This useEffect for the prediction form is UNCHANGED
   useEffect(() => {
     const timerId = setTimeout(() => {
       if (formData["Wave Height (m)"]) handleCheck();
@@ -78,34 +94,57 @@ export default function AuthoritiesPage() {
     return () => clearTimeout(timerId);
   }, [formData]);
 
+  /*
+  // REMOVED: The original useEffect that listened for real Firebase data.
+  useEffect(() => {
+    const sensorDataRef = ref(database, 'sensor/data');
+    const unsubscribe = onValue(sensorDataRef, (snapshot) => {
+      // ... logic to set real data
+    });
+    return () => unsubscribe();
+  }, []);
+  */
+
+  // --- ADDED: useEffect to SIMULATE live sensor data ---
+  useEffect(() => {
+    const simulationInterval = setInterval(() => {
+        const newSensorData = {
+            roll: getRandomNumber(-15, 15),
+            period: getRandomNumber(4, 20),
+            intensity: getRandomNumber(1, 10),
+        };
+        setSensorData(newSensorData);
+    }, 1500); // Update every 1.5 seconds
+
+    // Cleanup function to stop the interval when the component unmounts
+    return () => clearInterval(simulationInterval);
+  }, []); // Empty array ensures this runs only once on mount
+
+  // This function for the prediction form is UNCHANGED
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prevState) => ({ ...prevState, [name]: value }));
   };
-
+  
+  // This function for the prediction form is UNCHANGED
   const handleCheck = async () => {
     try {
       setLoading(true);
       setResult(null);
-
       const numericData = {};
       for (const [key, value] of Object.entries(formData)) {
         const apiKey = labelToApiKeyMap[key];
         numericData[apiKey] = parseFloat(value);
       }
-      
       setHistory(prev => [...prev.slice(-14), numericData.Tp]);
-
       const getDayOfYear = (date) => {
         const start = new Date(date.getFullYear(), 0, 0);
         const diff = date - start;
         const oneDay = 1000 * 60 * 60 * 24;
         return Math.floor(diff / oneDay);
       };
-
       const now = new Date();
       const dayOfYear = getDayOfYear(now);
-
       const fullFeatureData = {
         ...numericData,
         hour: now.getHours(),
@@ -115,22 +154,17 @@ export default function AuthoritiesPage() {
         Hs_rolling_6h: numericData.Hs,
         Tp_rolling_6h: numericData.Tp,
       };
-
       const response = await fetch("http://127.0.0.1:5000/predict", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(fullFeatureData),
       });
-
       const data = await response.json();
       setResult(data);
-      
-      // NEW: Check for Kallakkadal and send the message automatically
       if (data.prediction === 'Kallakkadal') {
         const alertMessage = "🚨 DANGER: Kallakkadal conditions detected. Please take caution.";
         sendAlert(alertMessage);
       }
-      
     } catch (err) {
       console.error("Error:", err);
       setResult({ error: "Failed to connect to the server." });
@@ -147,17 +181,9 @@ export default function AuthoritiesPage() {
           <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: "bold" }}>Authorities Dashboard</Typography>
         </Toolbar>
       </AppBar>
-
       <Container component="main" sx={{ flexGrow: 1, display: "flex", alignItems: "center", justifyContent: "center", py: 4 }}>
         <Grid container alignItems="stretch" justifyContent="center" spacing={4}>
-          
-          {/* Left Column: Visualizations */}
-          <Grid item xs={12} md={7}>
-            <HistoryChart data={history} />
-          </Grid>
-
-          {/* Right Column: Prediction Form (Compressed) */}
-          <Grid item xs={12} md={5}>
+          <Grid item xs={12} md={6}>
             <Paper variant="outlined" sx={{ backgroundColor: "rgba(255, 255, 255, 0.85)", backdropFilter: 'blur(10px)', color: 'black', border: '1px solid', borderColor: 'rgba(255, 255, 255, 0.3)', padding: { xs: 3, md: 4 }, height: '100%', borderRadius: 4 }}>
               <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>Live Wave Prediction</Typography>
               <Typography variant="body2" sx={{ color: 'grey.700', mb: 3 }}>Prediction updates automatically.</Typography>
@@ -168,14 +194,14 @@ export default function AuthoritiesPage() {
                   </Grid>
                 ))}
               </Grid>
-              <Box sx={{ mt: 3, p: 2, borderRadius: 2, minHeight: 100, backgroundColor: result ? (result.error ? '#ffebee' : (result.value === 1 ? '#ffebee' : '#c8e6c9')) : '#f5f5f5', border: '1px solid', borderColor: result ? (result.error ? 'error.main' : (result.value === 1 ? 'error.main' : 'success.dark')) : 'grey.300', transition: 'all 0.5s ease' }}>
+              <Box sx={{ mt: 3, p: 2, borderRadius: 2, minHeight: 100, backgroundColor: result ? (result.error ? '#ffebee' : (result.prediction === 'Kallakkadal' ? '#ffebee' : '#c8e6c9')) : '#f5f5f5', border: '1px solid', borderColor: result ? (result.error ? 'error.main' : (result.prediction === 'Kallakkadal' ? 'error.main' : 'success.dark')) : 'grey.300', transition: 'all 0.5s ease' }}>
                 {loading ? <CircularProgress size={24} /> : (
                   result && (
                     <>
                       <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'black' }}>Results</Typography>
                       {result.prediction ? (
                         <>
-                          <Typography variant="h5" sx={{ color: result.value === 1 ? 'error.main' : 'success.dark', fontWeight: 'bold', my: 1 }}>{result.prediction}</Typography>
+                          <Typography variant="h5" sx={{ color: result.prediction === 'Kallakkadal' ? 'error.main' : 'success.dark', fontWeight: 'bold', my: 1 }}>{result.prediction}</Typography>
                           <Typography sx={{ color: 'black' }}><strong>Confidence:</strong> {result.confidence}</Typography>
                         </>
                       ) : (
@@ -188,7 +214,15 @@ export default function AuthoritiesPage() {
             </Paper>
           </Grid>
 
-          {/* Removed: The separate Grid item for sending a message */}
+          <Grid item xs={12} md={6}>
+            <Paper elevation={3} sx={{ p: 3, backgroundColor: 'rgba(0, 0, 0, 0.2)', color: 'white', mb: 4 }}>
+              <Typography variant="h6" gutterBottom>Live Sensor Readings</Typography>
+              <Typography><strong>Live Roll:</strong> {sensorData.roll} degrees</Typography>
+              <Typography><strong>Calculated Wave Period:</strong> {sensorData.period} s</Typography>
+              <Typography><strong>Calculated Wave Intensity:</strong> {sensorData.intensity} degrees</Typography>
+            </Paper>
+            <HistoryChart data={history} />
+          </Grid>
         </Grid>
       </Container>
     </Box>
